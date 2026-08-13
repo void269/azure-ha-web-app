@@ -21,5 +21,21 @@ az deployment group create \
         vnetAddressPrefix="$VNET_ADDRESS_PREFIX" \
         subnetName="$SUBNET_NAME" \
         subnetPrefix="$SUBNET_PREFIX" \
-        nsgName="$NSG_NAME"
+        nsgName="$NSG_NAME" \
     > /dev/null
+
+echo "Creating Laod Balancer..."
+az deployment group create \
+    --name "LoadBalancerDeployment" \
+    --resource-group "$RESOURCE_GROUP" \
+    --template-file ./arm/load-balancer.json \
+    --parameters \
+        location="$LOCATION" \
+        publicIpName="$PUBLIC_IP_NAME" \
+        loadBalancerName="$LB_NAME" \
+        frontendName="$FRONTEND_NAME" \
+        backendPoolName="$BACKEND_POOL_NAME" \
+        probeName="$PROBE_NAME" \
+        loadBalancingRuleName="$LB_RULE_NAME" \
+    > /dev/null
+
