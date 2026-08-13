@@ -6,13 +6,15 @@ source ./config.env
 echo "Creating Resource Group..."
 az group create \
     --name "$RESOURCE_GROUP" \
-    --location "$LOCATION"
+    --location "$LOCATION" \
+    > /dev/null
+    
 
 echo "Creating Virtual Network..."
 az deployment group create \
     --name "NetworkDeployment" \
     --resource-group "$RESOURCE_GROUP" \
-    --template-file "./arm/network.json" \
+    --template-file ./arm/network.json \
     --parameters \
         location="$LOCATION" \
         vnetName="$VNET_NAME" \
@@ -20,4 +22,4 @@ az deployment group create \
         subnetName="$SUBNET_NAME" \
         subnetPrefix="$SUBNET_PREFIX" \
         nsgName="$NSG_NAME"
-
+    > /dev/null
