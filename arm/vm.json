@@ -19,16 +19,11 @@
     "backendPoolName": {
       "type": "string"
     },
-    "nic1Name": {
-      "type": "string"
+    "vmCount": {
+      "type": "int",
+      "defaultValue": 2
     },
-    "nic2Name": {
-      "type": "string"
-    },
-    "vm1Name": {
-      "type": "string"
-    },
-    "vm2Name": {
+    "vmPrefix": {
       "type": "string"
     },
     "vmSize": {
@@ -41,27 +36,37 @@
       "type": "string"
     }
   },
+
   "variables": {
     "subnetId": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('vnetName'), parameters('subnetName'))]",
-    "backendPoolId": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', parameters('loadBalancerName'), parameters('backendPoolName'))]",
-    "nic1Id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('nic1Name'))]",
-    "nic2Id": "[resourceId('Microsoft.Network/networkInterfaces', parameters('nic2Name'))]"
+    "backendPoolId": "[resourceId('Microsoft.Network/loadBalancers/backendAddressPools', parameters('loadBalancerName'), parameters('backendPoolName'))]"
   },
+
   "resources": [
     {
       "type": "Microsoft.Network/networkInterfaces",
       "apiVersion": "2024-05-01",
-      "name": "[parameters('nic1Name')]",
+      "name": "[format('{0}-{1:00}-nic', parameters('vmPrefix'), add(copyIndex(), 1))]",
       "location": "[parameters('location')]",
+
+      "copy": {
+        "name": "nicCopy",
+        "count": "[parameters('vmCount')]"
+      },
+
       "properties": {
         "ipConfigurations": [
           {
             "name": "ipconfig1",
+
             "properties": {
+              "primary": true,
               "privateIPAllocationMethod": "Dynamic",
+
               "subnet": {
                 "id": "[variables('subnetId')]"
               },
+
               "loadBalancerBackendAddressPools": [
                 {
                   "id": "[variables('backendPoolId')]"
@@ -70,99 +75,29 @@
             }
           }
         ]
-      }
-    },
-    {
-      "type": "Microsoft.Network/networkInterfaces",
-      "apiVersion": "2024-05-01",
-      "name": "[parameters('nic2Name')]",
-      "location": "[parameters('location')]",
-      "properties": {
-        "ipConfigurations": [
-          {
-            "name": "ipconfig1",
-            "properties": {
-              "privateIPAllocationMethod": "Dynamic",
-              "subnet": {
-                "id": "[variables('subnetId')]"
-              },
-              "loadBalancerBackendAddressPools": [
-                {
-                  "id": "[variables('backendPoolId')]"
-                }
-              ]
-            }
-          }
-        ]
-      }
-    },
-    {
-      "type": "Microsoft.Compute/virtualMachines",
-      "apiVersion": "2025-04-01",
-      "name": "[parameters('vm1Name')]",
-      "location": "[parameters('location')]",
-      "dependsOn": [
-        "[resourceId('Microsoft.Network/networkInterfaces', parameters('nic1Name'))]"
-      ],
-      "properties": {
-        "hardwareProfile": {
-          "vmSize": "[parameters('vmSize')]"
-        },
-        "storageProfile": {
-          "imageReference": {
-            "publisher": "Canonical",
-            "offer": "0001-com-ubuntu-server-jammy",
-            "sku": "22_04-lts-gen2",
-            "version": "latest"
-          },
-          "osDisk": {
-            "createOption": "FromImage",
-            "managedDisk": {
-              "storageAccountType": "Standard_LRS"
-            }
-          }
-        },
-        "osProfile": {
-          "computerName": "[parameters('vm1Name')]",
-          "adminUsername": "[parameters('adminUsername')]",
-          "customData": "[base64('#!/bin/bash\napt-get update\napt-get install -y nginx\necho \"<h1>Rand Enterprises</h1><h2>Web Server 01</h2>\" > /var/www/html/index.html\nsystemctl enable nginx\nsystemctl start nginx\n')]",
-          "linuxConfiguration": {
-            "disablePasswordAuthentication": true,
-            "ssh": {
-              "publicKeys": [
-                {
-                  "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
-                  "keyData": "[parameters('sshPublicKey')]"
-                }
-              ]
-            }
-          }
-        },
-        "networkProfile": {
-          "networkInterfaces": [
-            {
-              "id": "[variables('nic1Id')]",
-              "properties": {
-                "primary": true
-              }
-            }
-          ]
-        }
       }
     },
 
     {
       "type": "Microsoft.Compute/virtualMachines",
       "apiVersion": "2025-04-01",
-      "name": "[parameters('vm2Name')]",
+      "name": "[format('{0}-{1:00}', parameters('vmPrefix'), add(copyIndex(), 1))]",
       "location": "[parameters('location')]",
+
+      "copy": {
+        "name": "vmCopy",
+        "count": "[parameters('vmCount')]"
+      },
+
       "dependsOn": [
-        "[resourceId('Microsoft.Network/networkInterfaces', parameters('nic2Name'))]"
+        "nicCopy"
       ],
+
       "properties": {
         "hardwareProfile": {
           "vmSize": "[parameters('vmSize')]"
         },
+
         "storageProfile": {
           "imageReference": {
             "publisher": "Canonical",
@@ -170,19 +105,25 @@
             "sku": "22_04-lts-gen2",
             "version": "latest"
           },
+
           "osDisk": {
             "createOption": "FromImage",
+
             "managedDisk": {
               "storageAccountType": "Standard_LRS"
             }
           }
         },
+
         "osProfile": {
-          "computerName": "[parameters('vm2Name')]",
+          "computerName": "[format('{0}-{1:00}', parameters('vmPrefix'), add(copyIndex(), 1))]",
           "adminUsername": "[parameters('adminUsername')]",
-          "customData": "[base64('#!/bin/bash\napt-get update\napt-get install -y nginx\necho \"<h1>Rand Enterprises</h1><h2>Web Server 02</h2>\" > /var/www/html/index.html\nsystemctl enable nginx\nsystemctl start nginx\n')]",
+
+          "customData": "[base64(format('#!/bin/bash\napt-get update\napt-get install -y nginx\necho \"<h1>Rand Enterprises</h1><h2>{0}-{1:00}</h2>\" > /var/www/html/index.html\nsystemctl enable nginx\nsystemctl start nginx\n', parameters('vmPrefix'), add(copyIndex(), 1)))]",
+
           "linuxConfiguration": {
             "disablePasswordAuthentication": true,
+
             "ssh": {
               "publicKeys": [
                 {
@@ -193,10 +134,12 @@
             }
           }
         },
+
         "networkProfile": {
           "networkInterfaces": [
             {
-              "id": "[variables('nic2Id')]",
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', format('{0}-{1:00}-nic', parameters('vmPrefix'), add(copyIndex(), 1)))]",
+
               "properties": {
                 "primary": true
               }
@@ -206,14 +149,16 @@
       }
     }
   ],
+
   "outputs": {
-    "vm1Id": {
-      "type": "string",
-      "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vm1Name'))]"
+    "vmCount": {
+      "type": "int",
+      "value": "[parameters('vmCount')]"
     },
-    "vm2Id": {
+
+    "vmPrefix": {
       "type": "string",
-      "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vm2Name'))]"
+      "value": "[parameters('vmPrefix')]"
     }
   }
 }

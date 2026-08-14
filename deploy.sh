@@ -158,10 +158,8 @@ az deployment group create \
         subnetName="$SUBNET_NAME" \
         loadBalancerName="$LB_NAME" \
         backendPoolName="$BACKEND_POOL_NAME" \
-        nic1Name="$NIC1_NAME" \
-        nic2Name="$NIC2_NAME" \
-        vm1Name="$VM1_NAME" \
-        vm2Name="$VM2_NAME" \
+        vmCount="$VM_COUNT" \
+        vmPrefix="$VM_PREFIX" \
         vmSize="$VM_SIZE" \
         adminUsername="$ADMIN_USERNAME" \
         sshPublicKey="$SSH_PUBLIC_KEY" \
