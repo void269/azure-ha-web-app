@@ -47,11 +47,22 @@ if [[ "$(az group exists --name "$RESOURCE_GROUP")" == "true" ]]; then
         --yes \
         --no-wait
 
-    echo "Waiting for Resource Group deletion to complete..."
+   echo "Waiting for Resource Group deletion to complete..."
 
-    az group wait \
-        --name "$RESOURCE_GROUP" \
-        --deleted
+    while [[ "$(az group exists --name "$RESOURCE_GROUP")" == "true" ]]; do
+
+        RESOURCE_COUNT="$(
+            az resource list \
+                --resource-group "$RESOURCE_GROUP" \
+                --query "length(@)" \
+                --output tsv 2>/dev/null || echo "0"
+        )"
+
+        echo "Resources remaining: $RESOURCE_COUNT"
+
+        sleep 10
+
+    done
 
     echo "Resource Group deleted."
 
