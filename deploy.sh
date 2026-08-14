@@ -23,7 +23,16 @@ fi
 # Azure Subscription
 echo "Setting Azure subscription..."
 az account set \
-    --subscription "$AZURE_SUBSCRIPTION"
+    --subscription "$AZURE_SUBSCRIPTION_NAME"
+
+# Retrieve Subscription ID
+AZURE_SUBSCRIPTION_ID="$(
+    az account show \
+        --query id \
+        --output tsv
+)"
+echo "Subscription: $AZURE_SUBSCRIPTION_NAME"
+echo "Subscription ID: $AZURE_SUBSCRIPTION_ID"
 
 # Check if Resource Group already exists
 echo
@@ -63,7 +72,7 @@ echo "Creating Azure SSH public key resource..."
 
 az rest \
     --method put \
-    --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Compute/sshPublicKeys/$SSH_KEY_NAME?api-version=2025-04-01" \
+    --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Compute/sshPublicKeys/$SSH_KEY_NAME?api-version=2025-04-01" \
     --body "{\"location\":\"$LOCATION\"}" \
     --output none
 
@@ -73,7 +82,7 @@ echo "Generating SSH key pair in Azure..."
 KEY_RESPONSE="$(
     az rest \
         --method post \
-        --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Compute/sshPublicKeys/$SSH_KEY_NAME/generateKeyPair?api-version=2025-11-01"
+        --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Compute/sshPublicKeys/$SSH_KEY_NAME/generateKeyPair?api-version=2025-11-01"
 )"
 
 # Save Private Key locally
