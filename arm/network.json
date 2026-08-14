@@ -26,6 +26,11 @@
 
     "nsgName": {
       "type": "string"
+    },
+
+    "sshSourceAddressPrefix": {
+      "type": "string",
+      "defaultValue": "Internet"
     }
   },
 
@@ -40,6 +45,7 @@
         "securityRules": [
           {
             "name": "Allow-HTTP",
+
             "properties": {
               "priority": 100,
               "direction": "Inbound",
@@ -56,6 +62,7 @@
 
           {
             "name": "Allow-LoadBalancer-Probe",
+
             "properties": {
               "priority": 110,
               "direction": "Inbound",
@@ -66,6 +73,23 @@
               "destinationPortRange": "80",
 
               "sourceAddressPrefix": "AzureLoadBalancer",
+              "destinationAddressPrefix": "*"
+            }
+          },
+
+          {
+            "name": "Allow-SSH",
+
+            "properties": {
+              "priority": 120,
+              "direction": "Inbound",
+              "access": "Allow",
+              "protocol": "Tcp",
+
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+
+              "sourceAddressPrefix": "[parameters('sshSourceAddressPrefix')]",
               "destinationAddressPrefix": "*"
             }
           }

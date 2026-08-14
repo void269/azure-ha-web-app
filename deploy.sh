@@ -2,14 +2,21 @@
 
 set -euo pipefail
 
+#######################################
 # Project Configuration
+#######################################
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 source "$ROOT_DIR/config.env"
 
 SSH_KEY_DIR="$ROOT_DIR/.keys"
 SSH_KEY_PATH="$SSH_KEY_DIR/$SSH_KEY_NAME"
 
+#######################################
 # Prerequisites
+#######################################
+
 if ! command -v az &>/dev/null; then
     echo "ERROR: Azure CLI is required but is not installed."
     exit 1
@@ -20,21 +27,28 @@ if ! command -v jq &>/dev/null; then
     exit 1
 fi
 
+#######################################
 # Azure Subscription
+#######################################
+
 echo "Setting Azure subscription..."
+
 az account set \
     --subscription "$AZURE_SUBSCRIPTION_NAME"
 
-# Retrieve Subscription ID
 AZURE_SUBSCRIPTION_ID="$(
     az account show \
         --query id \
         --output tsv
 )"
+
 echo "Subscription: $AZURE_SUBSCRIPTION_NAME"
 echo "Subscription ID: $AZURE_SUBSCRIPTION_ID"
 
-# Check if Resource Group already exists
+#######################################
+# Check Resource Group
+#######################################
+
 echo
 echo "Checking for existing Resource Group: $RESOURCE_GROUP"
 
@@ -46,7 +60,10 @@ if [[ "$(az group exists --name "$RESOURCE_GROUP")" == "true" ]]; then
     exit 1
 fi
 
-# Resource Group
+#######################################
+# Create Resource Group
+#######################################
+
 echo
 echo "Creating Resource Group: $RESOURCE_GROUP"
 
@@ -55,19 +72,25 @@ az group create \
     --location "$LOCATION" \
     --output none
 
+#######################################
 # SSH Key
+#######################################
+
 echo
 echo "Generating new SSH key pair..."
 
 mkdir -p "$SSH_KEY_DIR"
 
-# Remove any leftover local private key
+# Remove leftover local private key
 if [[ -f "$SSH_KEY_PATH" ]]; then
     echo "Removing existing local SSH private key..."
     rm -f "$SSH_KEY_PATH"
 fi
 
-# Create Azure SSH public-key resource
+#######################################
+# Create Azure SSH Public Key Resource
+#######################################
+
 echo "Creating Azure SSH public key resource..."
 
 az rest \
@@ -76,7 +99,10 @@ az rest \
     --body "{\"location\":\"$LOCATION\"}" \
     --output none
 
-# Generate SSH key pair in Azure
+#######################################
+# Generate SSH Key Pair
+#######################################
+
 echo "Generating SSH key pair in Azure..."
 
 KEY_RESPONSE="$(
@@ -85,10 +111,22 @@ KEY_RESPONSE="$(
         --url "https://management.azure.com/subscriptions/$AZURE_SUBSCRIPTION_ID/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Compute/sshPublicKeys/$SSH_KEY_NAME/generateKeyPair?api-version=2025-11-01"
 )"
 
-# Save Private Key locally
-echo "$KEY_RESPONSE" \
-    | jq -r '.privateKey' \
-    > "$SSH_KEY_PATH"
+PRIVATE_KEY="$(
+    echo "$KEY_RESPONSE" |
+        jq -r '.privateKey // empty'
+)"
+
+if [[ -z "$PRIVATE_KEY" ]]; then
+    echo
+    echo "ERROR: Azure did not return an SSH private key."
+    exit 1
+fi
+
+#######################################
+# Save Private Key
+#######################################
+
+printf '%s\n' "$PRIVATE_KEY" > "$SSH_KEY_PATH"
 
 chmod 600 "$SSH_KEY_PATH"
 
@@ -96,7 +134,10 @@ echo
 echo "SSH private key saved:"
 echo "$SSH_KEY_PATH"
 
-# Retrieve Public Key from Azure
+#######################################
+# Retrieve Public Key
+#######################################
+
 SSH_PUBLIC_KEY="$(
     az sshkey show \
         --resource-group "$RESOURCE_GROUP" \
@@ -105,7 +146,16 @@ SSH_PUBLIC_KEY="$(
         --output tsv
 )"
 
-# Deploying the Network
+if [[ -z "$SSH_PUBLIC_KEY" ]]; then
+    echo
+    echo "ERROR: Unable to retrieve SSH public key from Azure."
+    exit 1
+fi
+
+#######################################
+# Deploy Network
+#######################################
+
 echo
 echo "Deploying networking resources..."
 
@@ -120,11 +170,15 @@ az deployment group create \
         subnetName="$SUBNET_NAME" \
         subnetPrefix="$SUBNET_PREFIX" \
         nsgName="$NSG_NAME" \
+        sshSourceAddressPrefix="$SSH_SOURCE_ADDRESS_PREFIX" \
     --output none
 
 echo "Networking deployment complete."
 
-# Deploying the Load Balancer
+#######################################
+# Deploy Load Balancer
+#######################################
+
 echo
 echo "Deploying Load Balancer..."
 
@@ -140,11 +194,16 @@ az deployment group create \
         backendPoolName="$BACKEND_POOL_NAME" \
         probeName="$PROBE_NAME" \
         loadBalancingRuleName="$LB_RULE_NAME" \
+        vmCount="$VM_COUNT" \
+        sshNatPortBase="$SSH_NAT_PORT_BASE" \
     --output none
 
 echo "Load Balancer deployment complete."
 
-# Deploying Virtual Machines
+#######################################
+# Deploy Virtual Machines
+#######################################
+
 echo
 echo "Deploying Virtual Machines..."
 
@@ -167,7 +226,10 @@ az deployment group create \
 
 echo "Virtual Machine deployment complete."
 
+#######################################
 # Deployment Output
+#######################################
+
 PUBLIC_IP="$(
     az network public-ip show \
         --resource-group "$RESOURCE_GROUP" \
@@ -181,6 +243,21 @@ echo "Deployment complete."
 echo
 echo "Load Balancer Public IP: $PUBLIC_IP"
 echo "Web URL: http://$PUBLIC_IP"
+
 echo
 echo "SSH private key:"
 echo "$SSH_KEY_PATH"
+
+echo
+echo "SSH Connections:"
+
+for ((i = 1; i <= VM_COUNT; i++)); do
+    SSH_PORT=$((SSH_NAT_PORT_BASE + i))
+    VM_NUMBER="$(printf "%02d" "$i")"
+
+    echo
+    echo "$VM_PREFIX-$VM_NUMBER:"
+    echo "ssh -i \"$SSH_KEY_PATH\" -p $SSH_PORT $ADMIN_USERNAME@$PUBLIC_IP"
+done
+
+echo
