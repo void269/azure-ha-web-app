@@ -11,7 +11,7 @@ SSH_KEY_PATH="$SSH_KEY_DIR/$SSH_KEY_NAME"
 # Azure Subscription
 echo "Setting Azure subscription..."
 az account set \
-    --subscription "$AZURE_SUBSCRIPTION"
+    --subscription "$AZURE_SUBSCRIPTION_NAME"
 
 # Check Resource Group
 echo
